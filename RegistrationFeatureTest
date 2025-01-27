@@ -1,0 +1,77 @@
+<?php
+
+namespace Tests\Feature;
+
+use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\User;
+
+class RegistrationFeatureTest extends TestCase
+{
+    use RefreshDatabase;
+
+    /** @test */
+    public function a_user_can_register_successfully()
+    {
+        $response = $this->post('/register', [
+            'name' => 'Alice Smith',
+            'email' => 'alice@example.com',
+            'password' => 'securepassword',
+            'password_confirmation' => 'securepassword',
+        ]);
+
+        $response->assertStatus(201); // Assuming 201 is returned on successful registration
+        $this->assertCount(1, User::all());
+        $this->assertEquals('alice@example.com', User::first()->email);
+    }
+
+    /** @test */
+    public function registration_fails_with_invalid_data()
+    {
+        $response = $this->post('/register', [
+            'name' => '',
+            'email' => 'invalid-email',
+            'password' => 'short',
+            'password_confirmation' => 'notmatching',
+        ]);
+
+        $response->assertStatus(422); // Validation error
+        $this->assertCount(0, User::all());
+        $response->assertJsonValidationErrors(['name', 'email', 'password']);
+    }
+
+    /** @test */
+    public function registration_fails_if_email_already_exists()
+    {
+        User::create([
+            'name' => 'Bob Johnson',
+            'email' => 'bob@example.com',
+            'password' => bcrypt('password123'),
+        ]);
+
+        $response = $this->post('/register', [
+            'name' => 'Charlie Brown',
+            'email' => 'bob@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertStatus(422); // Validation error
+        $this->assertCount(1, User::all());
+        $response->assertJsonValidationErrors(['email']);
+    }
+
+    /** @test */
+    public function password_confirmation_is_required()
+    {
+        $response = $this->post('/register', [
+            'name' => 'David Smith',
+            'email' => 'david@example.com',
+            'password' => 'password123',
+            'password_confirmation' => '',
+        ]);
+
+        $response->assertStatus(422); // Validation error
+        $response->assertJsonValidationErrors(['password']);
+    }
+}
