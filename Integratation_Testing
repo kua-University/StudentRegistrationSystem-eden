@@ -1,0 +1,77 @@
+<?php
+
+namespace Tests\Integration;
+
+use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\User;
+
+class UserRegistrationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    /** @test */
+    public function user_can_register_successfully()
+    {
+        $response = $this->postJson('/register', [
+            'name' => 'Alice Doe',
+            'email' => 'alice@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('users', ['email' => 'alice@example.com']);
+        $this->assertEquals(1, User::count());
+    }
+
+    /** @test */
+    public function registration_fails_with_invalid_input()
+    {
+        $response = $this->postJson('/register', [
+            'name' => '',
+            'email' => 'not-an-email',
+            'password' => '123',
+            'password_confirmation' => '456',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['name', 'email', 'password']);
+        $this->assertDatabaseCount('users', 0);
+    }
+
+    /** @test */
+    public function registration_fails_when_email_already_registered()
+    {
+        User::factory()->create([
+            'name' => 'Existing User',
+            'email' => 'existing@example.com',
+            'password' => bcrypt('password123'),
+        ]);
+
+        $response = $this->postJson('/register', [
+            'name' => 'New User',
+            'email' => 'existing@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['email']);
+        $this->assertDatabaseCount('users', 1);
+    }
+
+    /** @test */
+    public function password_confirmation_is_required()
+    {
+        $response = $this->postJson('/register', [
+            'name' => 'David Doe',
+            'email' => 'david@example.com',
+            'password' => 'password123',
+            'password_confirmation' => '',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['password']);
+    }
+}
