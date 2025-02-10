@@ -1,0 +1,90 @@
+<?php
+
+namespace Tests\Feature;
+
+use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\User;
+
+class UserRegistrationSystemTest extends TestCase
+{
+    use RefreshDatabase;
+
+    /** @test */
+    public function user_can_register_successfully()
+    {
+        // Access the registration page
+        $response = $this->get('/register');
+        $response->assertStatus(200);
+
+        // Submit the registration form
+        $response = $this->post('/register', [
+            'name' => 'Alice Doe',
+            'email' => 'alice@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        // Check for redirection after successful registration
+        $response->assertRedirect('/home');
+        // Verify that the user is created in the database
+        $this->assertDatabaseHas('users', ['email' => 'alice@example.com']);
+        $this->assertEquals(1, User::count());
+    }
+
+    /** @test */
+    public function registration_fails_with_invalid_input()
+    {
+        // Submit invalid registration data
+        $response = $this->post('/register', [
+            'name' => '',
+            'email' => 'not-an-email',
+            'password' => '123',
+            'password_confirmation' => '456',
+        ]);
+
+        // Check for validation errors
+        $response->assertSessionHasErrors(['name', 'email', 'password']);
+        // Ensure no user is created
+        $this->assertDatabaseCount('users', 0);
+    }
+
+    /** @test */
+    public function registration_fails_when_email_already_registered()
+    {
+        // Create an existing user
+        User::factory()->create([
+            'name' => 'Existing User',
+            'email' => 'existing@example.com',
+            'password' => bcrypt('password123'),
+        ]);
+
+        // Attempt to register with the same email
+        $response = $this->post('/register', [
+            'name' => 'New User',
+            'email' => 'existing@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        // Check for email validation error
+        $response->assertSessionHasErrors(['email']);
+        // Ensure only one user exists
+        $this->assertDatabaseCount('users', 1);
+    }
+
+    /** @test */
+    public function password_confirmation_is_required()
+    {
+        // Submit registration without password confirmation
+        $response = $this->post('/register', [
+            'name' => 'David Doe',
+            'email' => 'david@example.com',
+            'password' => 'password123',
+            'password_confirmation' => '',
+        ]);
+
+        // Check for validation errors
+        $response->assertSessionHasErrors(['password']);
+    }
+}
